@@ -2,7 +2,7 @@
 
 # 1. Check if the script is being run as a regular user
 if [[ $EUID -eq 0 ]]; then
-   echo "This script must be run as a regular user" 
+   echo "This script must be run as a regular user"
    exit 1
 fi
 
@@ -13,16 +13,16 @@ if [ ! -d "$SSH_FOLDER" ]; then
     chmod 700 "$SSH_FOLDER"
 fi
 
-# 3. Check home folder for new ssh .pem file and move them to the ssh folder with the correct 400 permission
-for PEM_FILE in "$HOME"/*.pem; do
+# 3. Check home folder and ssh folder for new ssh .pem file(s) and move them to the ssh folder with the correct 400 permission
+for PEM_FILE in "$HOME"/*.pem "$SSH_FOLDER"/*.pem; do
     if [ -f "$PEM_FILE" ]; then
         mv "$PEM_FILE" "$SSH_FOLDER"
         chmod 400 "$SSH_FOLDER/$(basename $PEM_FILE)"
     fi
 done
 
-# 4. Prompt the user if they are connecting to a new or existing server
-echo "Are you connecting to a new or existing server? (n/e)"
+# 4. Prompt the user if they are connecting to a new or existing server or deleting a server from the database
+echo "Do you want to connect to a new or existing server, or delete a server? (n/e/d)"
 read -r CHOICE
 
 # 5. If new server, prompt for server ip, username, and display a list of ssh keys to select from and save to local database
@@ -67,4 +67,28 @@ elif [[ "$CHOICE" == "e" ]]; then
 
     # Connect to the selected server using SSH
     ssh -i "$(echo "$SERVER_DETAILS" | cut -d',' -f4)" "$(echo "$SERVER_DETAILS" | cut -d',' -f2)@$(echo "$SERVER_DETAILS" | cut -d',' -f3)"
+
+# 7. If deleting server, display list of all servers and prompt which one to delete
+elif [[ "$CHOICE" == "d" ]]; then
+    # Display a list of existing servers to choose from
+    echo "Select a server to delete:"
+    select SERVER in $(cut -d',' -f1 "$HOME/.servers.db"); do
+if [ -n "$SERVER" ]; then
+break
+else
+echo "Invalid choice. Please try again."
+fi
+done
+
+# Confirm server deletion
+read -p "Are you sure you want to delete $SERVER from the list of servers? (y/n)" -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Remove server from local database
+    sed -i "/^$SERVER/d" "$HOME/.servers.db"
+    echo "Server $SERVER has been deleted from the list of servers."
+fi
+else
+echo "Invalid choice. Please try again."
+exit 1
 fi
